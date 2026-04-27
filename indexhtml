@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lingkaran Interaktif 3D</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome untuk Ikon -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;800&display=swap" rel="stylesheet">
+    <!-- Three.js & OrbitControls -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Poppins', 'sans-serif'] },
+                    colors: {
+                        darkbg: '#0a0f1c',
+                        neoncyan: '#00e5ff',
+                        neonpink: '#ff007f',
+                        neonyellow: '#ffea00',
+                        neongreen: '#00e676',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #0a0f1c; color: white; }
+        #canvas-container { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 1; }
+        #ui-layer { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 10; pointer-events: none; }
+        .pointer-auto { pointer-events: auto; }
+        
+        /* Neon Glow Effects */
+        .glow-text { text-shadow: 0 0 10px rgba(0, 229, 255, 0.8), 0 0 20px rgba(0, 229, 255, 0.4); }
+        .glow-btn-cyan { box-shadow: 0 0 15px rgba(0, 229, 255, 0.5); transition: all 0.3s; }
+        .glow-btn-cyan:hover { box-shadow: 0 0 25px rgba(0, 229, 255, 0.9); transform: scale(1.05); }
+        
+        .glow-btn-pink { box-shadow: 0 0 15px rgba(255, 0, 127, 0.5); transition: all 0.3s; }
+        .glow-btn-pink:hover { box-shadow: 0 0 25px rgba(255, 0, 127, 0.9); transform: scale(1.05); }
+
+        .glass-panel { background: rgba(10, 15, 28, 0.7); backdrop-filter: blur(10px); border: 1px solid rgba(0, 229, 255, 0.2); }
+        
+        /* Slider Styling */
+        input[type=range] { -webkit-appearance: none; width: 100%; background: transparent; }
+        input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; height: 20px; width: 20px; border-radius: 50%; background: #00e5ff; cursor: pointer; box-shadow: 0 0 10px #00e5ff; }
+        input[type=range]::-webkit-slider-runnable-track { width: 100%; height: 8px; cursor: pointer; background: rgba(255,255,255,0.2); border-radius: 4px; }
+    </style>
+</head>
+<body>
+
+    <!-- 3D Canvas -->
+    <div id="canvas-container"></div>
+
+    <!-- UI Layer -->
+    <div id="ui-layer" class="flex flex-col">
+        <!-- Dynamic Content Injected Here -->
+    </div>
+
+    <!-- Audio (Simulasi menggunakan Web Audio API nantinya, untuk sekarang elemen audio kosong siap diisi) -->
+    <audio id="bgm" loop><source src="" type="audio/mp3"></audio>
+    <audio id="sfx-click"><source src="" type="audio/mp3"></audio>
+
+    <script>
+        // --- THREE.JS SETUP ---
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        // Fog for depth
+        scene.fog = new THREE.FogExp2(0x0a0f1c, 0.03);
+
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, -10, 12);
+
+        const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        container.appendChild(renderer.domElement);
+
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+
+        // Lighting
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+        scene.add(ambientLight);
+        const pointLight = new THREE.PointLight(0x00e5ff, 1, 100);
+        pointLight.position.set(0, 0, 10);
+        scene.add(pointLight);
+
+        // --- 3D OBJECTS & GROUPS ---
+        const groups = {
+            intro: new THREE.Group(),
+            materi: new THREE.Group(),
+            unsur: new THREE.Group(),
+            pusat: new THREE.Group(),
+            keliling: new THREE.Group()
+        };
+        Object.values(groups).forEach(g => scene.add(g));
+
+        // Materials (Neon Style)
+        const matCyan = new THREE.MeshStandardMaterial({ color: 0x00e5ff, emissive: 0x00e5ff, emissiveIntensity: 0.5, transparent: true, opacity: 0.9, side: THREE.DoubleSide });
+        const matPink = new THREE.MeshStandardMaterial({ color: 0xff007f, emissive: 0xff007f, emissiveIntensity: 0.8, side: THREE.DoubleSide });
+        const matYellow = new THREE.MeshStandardMaterial({ color: 0xffea00, emissive: 0xffea00, emissiveIntensity: 0.8 });
+        const matGreen = new THREE.MeshStandardMaterial({ color: 0x00e676, emissive: 0x00e676, emissiveIntensity: 0.8, transparent: true, opacity: 0.7, side: THREE.DoubleSide });
+        const matGhost = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.1, side: THREE.DoubleSide, wireframe: true });
+
+        // 1. Intro Objects (Rotating Torus)
+        const introTorus = new THREE.Mesh(new THREE.TorusGeometry(4, 0.2, 16, 100), matCyan);
+        const introSphere = new THREE.Mesh(new THREE.SphereGeometry(1, 32, 32), matPink);
+        groups.intro.add(introTorus);
+        groups.intro.add(introSphere);
+
+        // 2. Materi Objects
+        const baseCircle = new THREE.Mesh(new THREE.CylinderGeometry(5, 5, 0.1, 64), matCyan);
+        baseCircle.rotation.x = Math.PI / 2;
+        groups.materi.add(baseCircle);
+
+        // 3. Unsur Objects
+        const unsurBase = new THREE.Mesh(new THREE.RingGeometry(4.9, 5.0, 64), matCyan);
+        groups.unsur.add(unsurBase);
+        
+        const uTitik = new THREE.Mesh(new THREE.SphereGeometry(0.3, 32, 32), matYellow);
+        const uJari = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 5, 16), matCyan);
+        uJari.position.set(2.5, 0, 0);
+        uJari.rotation.z = Math.PI / 2;
+        const uDiam = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 10, 16), matPink);
+        uDiam.rotation.z = Math.PI / 2;
+        const uJuring = new THREE.Mesh(new THREE.CircleGeometry(5, 32, 0, Math.PI / 3), matGreen);
+        const uBusur = new THREE.Mesh(new THREE.RingGeometry(4.8, 5.2, 32, 1, 0, Math.PI / 3), matPink);
+        
+        uTitik.visible = false; uJari.visible = false; uDiam.visible = false; uJuring.visible = false; uBusur.visible = false;
+        groups.unsur.add(uTitik, uJari, uDiam, uJuring, uBusur);
+
+        // 4. Sudut Pusat Objects
+        const pBase = new THREE.Mesh(new THREE.RingGeometry(4.9, 5.0, 64), matGhost);
+        const pJuring = new THREE.Mesh(new THREE.CircleGeometry(5, 32, 0, Math.PI/2), matGreen); // dynamic
+        const pLine1 = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 5), matCyan);
+        pLine1.position.set(2.5, 0, 0); pLine1.rotation.z = Math.PI/2;
+        const pLine2 = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 5), matCyan); // dynamic
+        groups.pusat.add(pBase, pJuring, pLine1, pLine2);
+
+        // 5. Sudut Keliling Objects
+        const kBase = new THREE.Mesh(new THREE.RingGeometry(4.9, 5.0, 64), matGhost);
+        const kLineP1 = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 5), matCyan); // Center to A
+        const kLineP2 = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 5), matCyan); // Center to B
+        const kLineK1 = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 1), matPink); // Edge to A
+        const kLineK2 = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 1), matPink); // Edge to B
+        const kPointC = new THREE.Mesh(new THREE.SphereGeometry(0.2), matYellow); // Center
+        const kPointD = new THREE.Mesh(new THREE.SphereGeometry(0.2), matPink); // Edge Point
+        groups.keliling.add(kBase, kLineP1, kLineP2, kLineK1, kLineK2, kPointC, kPointD);
+
+        // --- STATE & LOGIC ---
+        let currentScene = 'intro';
+        let sudutPusatAngle = 90; // degrees
+        let kuisState = { q: 0, score: 0 };
+
+        const questions = [
+            { text: "Garis lurus yang menghubungkan dua titik pada lengkungan lingkaran dan melalui titik pusat disebut?", options: ["Jari-jari", "Diameter", "Busur", "Tali Busur"], answer: 1 },
+            { text: "Jika sudut pusat suatu lingkaran adalah 80°, berapakah besar sudut keliling yang menghadap busur yang sama?", options: ["40°", "80°", "160°", "20°"], answer: 0 },
+            { text: "Daerah yang dibatasi oleh dua jari-jari dan satu busur lingkaran disebut?", options: ["Tembereng", "Juring", "Diameter", "Apotema"], answer: 1 }
+        ];
+
+        function hideAllGroups() {
+            Object.values(groups).forEach(g => g.visible = false);
+            controls.autoRotate = false;
+        }
+
+        // --- UI TEMPLATES ---
+        const uiLayer = document.getElementById('ui-layer');
+
+        const scenesUI = {
+            intro: `
+                <div class="flex flex-col items-center justify-center h-full text-center p-4">
+                    <h1 class="text-4xl md:text-6xl font-bold mb-4 glow-text text-neoncyan tracking-wider">LINGKARAN 3D</h1>
+                    <p class="text-lg mb-12 text-gray-300 max-w-lg">Eksplorasi interaktif unsur-unsur dan sudut pada lingkaran dalam ruang tiga dimensi.</p>
+                    <div class="flex gap-4 pointer-auto">
+                        <button onclick="changeScene('menu')" class="bg-neoncyan text-darkbg px-8 py-3 rounded-full font-bold text-lg glow-btn-cyan"><i class="fas fa-play mr-2"></i> MULAI</button>
+                        <button class="bg-transparent border-2 border-neonpink text-neonpink px-8 py-3 rounded-full font-bold text-lg glow-btn-pink"><i class="fas fa-question-circle mr-2"></i> PETUNJUK</button>
+                    </div>
+                </div>
+            `,
+            menu: `
+                <div class="p-6 pointer-auto">
+                    <h2 class="text-3xl font-bold text-white mb-8 glow-text"><i class="fas fa-th-large mr-3"></i>Menu Utama</h2>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-4xl">
+                        <button onclick="changeScene('materi')" class="glass-panel p-6 rounded-2xl text-left hover:bg-white/10 transition group">
+                            <div class="text-neoncyan text-4xl mb-4 group-hover:scale-110 transition"><i class="fas fa-cube"></i></div>
+                            <h3 class="text-xl font-bold mb-2">Materi Lingkaran</h3>
+                            <p class="text-sm text-gray-400">Pengenalan konsep dasar 3D.</p>
+                        </button>
+                        <button onclick="changeScene('unsur')" class="glass-panel p-6 rounded-2xl text-left hover:bg-white/10 transition group">
+                            <div class="text-neonpink text-4xl mb-4 group-hover:scale-110 transition"><i class="fas fa-chart-pie"></i></div>
+                            <h3 class="text-xl font-bold mb-2">Unsur-Unsur</h3>
+                            <p class="text-sm text-gray-400">Pusat, Jari-jari, Diameter, Juring.</p>
+                        </button>
+                        <button onclick="changeScene('pusat')" class="glass-panel p-6 rounded-2xl text-left hover:bg-white/10 transition group">
+                            <div class="text-neonyellow text-4xl mb-4 group-hover:scale-110 transition"><i class="fas fa-vector-square"></i></div>
+                            <h3 class="text-xl font-bold mb-2">Sudut Pusat</h3>
+                            <p class="text-sm text-gray-400">Simulasi sudut dari pusat lingkaran.</p>
+                        </button>
+                        <button onclick="changeScene('keliling')" class="glass-panel p-6 rounded-2xl text-left hover:bg-white/10 transition group">
+                            <div class="text-neongreen text-4xl mb-4 group-hover:scale-110 transition"><i class="fas fa-draw-polygon"></i></div>
+                            <h3 class="text-xl font-bold mb-2">Sudut Keliling</h3>
+                            <p class="text-sm text-gray-400">Relasi sudut pusat & keliling.</p>
+                        </button>
+                        <button onclick="changeScene('kuis')" class="glass-panel p-6 rounded-2xl text-left hover:bg-white/10 transition group border-neonpink">
+                            <div class="text-neonpink text-4xl mb-4 group-hover:scale-110 transition"><i class="fas fa-gamepad"></i></div>
+                            <h3 class="text-xl font-bold mb-2 text-neonpink">Kuis Interaktif</h3>
+                            <p class="text-sm text-gray-400">Uji pemahamanmu di sini!</p>
+                        </button>
+                    </div>
+                </div>
+            `,
+            materi: `
+                <div class="absolute top-4 left-4 pointer-auto">
+                    <button onclick="changeScene('menu')" class="bg-white/10 hover:bg-white/20 px-4 py-2 rounded-lg backdrop-blur text-white"><i class="fas fa-arrow-left mr-2"></i>Kembali</button>
+                </div>
+                <div class="absolute bottom-10 left-10 max-w-sm glass-panel p-6 rounded-2xl pointer-auto">
+                    <h3 class="text-2xl font-bold text-neoncyan mb-2">Apa itu Lingkaran?</h3>
+                    <p class="text-sm text-gray-300 mb-4">Kumpulan semua titik pada bidang datar yang memiliki jarak yang sama terhadap suatu titik tertentu (titik pusat).</p>
+                    <div class="flex items-center text-xs text-gray-400">
+                        <i class="fas fa-hand-pointer mr-2"></i> Drag untuk putar | Scroll untuk zoom
+                    </div>
+                </div>
+            `,
+            unsur: `
+                <div class="absolute top-4 left-4 pointer-auto">
+                    <button onclick="changeScene('menu')" class="bg-white/10 hover:bg-white/20 px-4 py-2 rounded-lg backdrop-blur text-white"><i class="fas fa-arrow-left mr-2"></i>Kembali</button>
+                </div>
+                <div class="absolute right-6 top-1/2 transform -translate-y-1/2 flex flex-col gap-3 pointer-auto w-48">
+                    <button onclick="toggleUnsur('uTitik')" class="bg-darkbg border border-neonyellow text-neonyellow px-4 py-3 rounded-lg hover:bg-neonyellow hover:text-darkbg transition text-left font-bold"><i class="fas fa-circle mr-2"></i>Titik Pusat</button>
+                    <button onclick="toggleUnsur('uJari')" class="bg-darkbg border border-neoncyan text-neoncyan px-4 py-3 rounded-lg hover:bg-neoncyan hover:text-darkbg transition text-left font-bold"><i class="fas fa-ruler-horizontal mr-2"></i>Jari-jari</button>
+                    <button onclick="toggleUnsur('uDiam')" class="bg-darkbg border border-neonpink text-neonpink px-4 py-3 rounded-lg hover:bg-neonpink hover:text-darkbg transition text-left font-bold"><i class="fas fa-arrows-alt-h mr-2"></i>Diameter</button>
+                    <button onclick="toggleUnsur('uBusur')" class="bg-darkbg border border-neonpink text-neonpink px-4 py-3 rounded-lg hover:bg-neonpink hover:text-darkbg transition text-left font-bold"><i class="fas fa-rainbow mr-2"></i>Busur</button>
+                    <button onclick="toggleUnsur('uJuring')" class="bg-darkbg border border-neongreen text-neongreen px-4 py-3 rounded-lg hover:bg-neongreen hover:text-darkbg transition text-left font-bold"><i class="fas fa-pizza-slice mr-2"></i>Juring</button>
+                </div>
+            `,
+            pusat: `
+                <div class="absolute top-4 left-4 pointer-auto">
+                    <button onclick="changeScene('menu')" class="bg-white/10 hover:bg-white/20 px-4 py-2 rounded-lg backdrop-blur text-white"><i class="fas fa-arrow-left mr-2"></i>Kembali</button>
+                </div>
+                <div class="absolute bottom-10 left-1/2 transform -translate-x-1/2 w-full max-w-md glass-panel p-6 rounded-2xl pointer-auto text-center">
+                    <h3 class="text-xl font-bold text-neoncyan mb-4">Besar Sudut Pusat: <span id="val-pusat" class="text-3xl text-white">90°</span></h3>
+                    <input type="range" id="slider-pusat" min="10" max="350" value="90" class="w-full" oninput="updateSudutPusat(this.value)">
+                </div>
+            `,
+            keliling: `
+                <div class="absolute top-4 left-4 pointer-auto">
+                    <button onclick="changeScene('menu')" class="bg-white/10 hover:bg-white/20 px-4 py-2 rounded-lg backdrop-blur text-white"><i class="fas fa-arrow-left mr-2"></i>Kembali</button>
+                </div>
+                <div class="absolute bottom-10 left-1/2 transform -translate-x-1/2 w-full max-w-lg glass-panel p-6 rounded-2xl pointer-auto flex flex-col items-center">
+                    <div class="flex justify-around w-full mb-6 text-center">
+                        <div>
+                            <p class="text-sm text-gray-400">Sudut Pusat</p>
+                            <h3 class="text-3xl font-bold text-neoncyan" id="val-k-pusat">90°</h3>
+                        </div>
+                        <div>
+                            <p class="text-sm text-gray-400">Sudut Keliling</p>
+                            <h3 class="text-3xl font-bold text-neonpink" id="val-k-keliling">45°</h3>
+                        </div>
+                    </div>
+                    <input type="range" id="slider-keliling" min="20" max="170" value="90" class="w-full" oninput="updateSudutKeliling(this.value)">
+                    <p class="text-xs text-center text-neongreen mt-4 mt-2 bg-neongreen/20 py-1 px-3 rounded-full"><i class="fas fa-lightbulb mr-1"></i> Sudut Keliling = ½ Sudut Pusat</p>
+                </div>
+            `,
+            kuis: `
+                <div class="absolute top-4 left-4 pointer-auto">
+                    <button onclick="changeScene('menu')" class="bg-white/10 hover:bg-white/20 px-4 py-2 rounded-lg backdrop-blur text-white"><i class="fas fa-arrow-left mr-2"></i>Keluar Kuis</button>
+                </div>
+                <div class="flex items-center justify-center h-full w-full pointer-auto px-4" id="kuis-container">
+                    <!-- Kuis di-render via JS -->
+                </div>
+            `
+        };
+
+        // --- LOGIC FUNCTIONS ---
+
+        function changeScene(sceneName) {
+            currentScene = sceneName;
+            uiLayer.innerHTML = scenesUI[sceneName];
+            hideAllGroups();
+
+            // Setup Camera for 2D/3D views
+            if(['kuis', 'menu'].includes(sceneName)) {
+                container.style.opacity = '0.2'; // Redupkan canvas
+            } else {
+                container.style.opacity = '1';
+                camera.position.set(0, 0, 12);
+                controls.target.set(0,0,0);
+            }
+
+            if(sceneName === 'intro') {
+                groups.intro.visible = true;
+                controls.autoRotate = true;
+                controls.autoRotateSpeed = 2.0;
+            } 
+            else if(sceneName === 'materi') {
+                groups.materi.visible = true;
+                camera.position.set(0, -8, 8); // Angled view
+            }
+            else if(sceneName === 'unsur') {
+                groups.unsur.visible = true;
+                // Reset toggles
+                [uTitik, uJari, uDiam, uJuring, uBusur].forEach(o => o.visible = false);
+            }
+            else if(sceneName === 'pusat') {
+                groups.pusat.visible = true;
+                updateSudutPusat(90);
+            }
+            else if(sceneName === 'keliling') {
+                groups.keliling.visible = true;
+                updateSudutKeliling(90);
+            }
+            else if(sceneName === 'kuis') {
+                kuisState = { q: 0, score: 0 };
+                renderKuis();
+            }
+        }
+
+        function toggleUnsur(unsurName) {
+            const map = { 'uTitik': uTitik, 'uJari': uJari, 'uDiam': uDiam, 'uJuring': uJuring, 'uBusur': uBusur };
+            if(map[unsurName]) {
+                map[unsurName].visible = !map[unsurName].visible;
+            }
+        }
+
+        function updateSudutPusat(deg) {
+            document.getElementById('val-pusat').innerText = deg + '°';
+            const rad = deg * Math.PI / 180;
+            
+            // Rebuild Juring geometry
+            pJuring.geometry.dispose();
+            pJuring.geometry = new THREE.CircleGeometry(5, 32, 0, rad);
+            
+            // Update Line 2 position
+            pLine2.position.set((2.5) * Math.cos(rad), (2.5) * Math.sin(rad), 0);
+            pLine2.rotation.z = rad + Math.PI/2;
+        }
+
+        function createCylinderBetweenPoints(p1, p2, material) {
+            const distance = p1.distanceTo(p2);
+            const position = p2.clone().add(p1).divideScalar(2);
+            const cylinder = new THREE.CylinderGeometry(0.05, 0.05, distance, 8);
+            const mesh = new THREE.Mesh(cylinder, material);
+            mesh.position.copy(position);
+            mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), p2.clone().sub(p1).normalize());
+            return mesh;
+        }
+
+        function updateSudutKeliling(degPusat) {
+            document.getElementById('val-k-pusat').innerText = degPusat + '°';
+            document.getElementById('val-k-keliling').innerText = (degPusat / 2) + '°';
+            
+            const R = 5;
+            const rad = degPusat * Math.PI / 180;
+            
+            // Points
+            const C = new THREE.Vector3(0,0,0); // Center
+            const D = new THREE.Vector3(0, R, 0); // Point on edge (top)
+            
+            // Arc points symmetrically
+            const startAngle = -Math.PI/2 - rad/2;
+            const endAngle = -Math.PI/2 + rad/2;
+            
+            const A = new THREE.Vector3(R * Math.cos(startAngle), R * Math.sin(startAngle), 0);
+            const B = new THREE.Vector3(R * Math.cos(endAngle), R * Math.sin(endAngle), 0);
+
+            kPointD.position.copy(D);
+
+            // Rebuild lines
+            groups.keliling.remove(kLineP1, kLineP2, kLineK1, kLineK2);
+            
+            kLineP1.geometry.dispose(); kLineP2.geometry.dispose();
+            kLineK1.geometry.dispose(); kLineK2.geometry.dispose();
+
+            const p1 = createCylinderBetweenPoints(C, A, matCyan);
+            const p2 = createCylinderBetweenPoints(C, B, matCyan);
+            const k1 = createCylinderBetweenPoints(D, A, matPink);
+            const k2 = createCylinderBetweenPoints(D, B, matPink);
+
+            kLineP1 = p1; kLineP2 = p2; kLineK1 = k1; kLineK2 = k2;
+            groups.keliling.add(kLineP1, kLineP2, kLineK1, kLineK2);
+        }
+
+        // --- KUIS LOGIC ---
+        function renderKuis() {
+            const container = document.getElementById('kuis-container');
+            if(kuisState.q >= questions.length) {
+                // Selesai
+                container.innerHTML = `
+                    <div class="glass-panel p-8 rounded-2xl text-center max-w-md w-full">
+                        <h2 class="text-4xl mb-4 text-neonyellow"><i class="fas fa-trophy"></i></h2>
+                        <h3 class="text-2xl font-bold mb-2">Kuis Selesai!</h3>
+                        <p class="text-gray-300 mb-6">Skor kamu: <span class="text-neoncyan font-bold text-xl">${kuisState.score} / ${questions.length * 100}</span></p>
+                        <button onclick="changeScene('menu')" class="bg-neonpink text-white px-6 py-2 rounded-full font-bold glow-btn-pink w-full">Kembali ke Menu</button>
+                    </div>
+                `;
+                return;
+            }
+
+            const q = questions[kuisState.q];
+            let optionsHTML = '';
+            q.options.forEach((opt, idx) => {
+                optionsHTML += `<button onclick="jawabKuis(${idx})" class="block w-full text-left bg-darkbg border border-gray-600 hover:border-neoncyan hover:bg-neoncyan/10 p-4 rounded-xl mb-3 transition">${opt}</button>`;
+            });
+
+            container.innerHTML = `
+                <div class="glass-panel p-8 rounded-2xl max-w-2xl w-full">
+                    <div class="flex justify-between text-sm text-neonpink mb-4 font-bold">
+                        <span>Pertanyaan ${kuisState.q + 1} dari ${questions.length}</span>
+                        <span>Skor: ${kuisState.score}</span>
+                    </div>
+                    <h3 class="text-xl font-bold mb-6">${q.text}</h3>
+                    <div class="options-container">
+                        ${optionsHTML}
+                    </div>
+                </div>
+            `;
+        }
+
+        function jawabKuis(idx) {
+            const q = questions[kuisState.q];
+            if(idx === q.answer) {
+                kuisState.score += 100;
+                // Bisa tambahkan sound effect benar disini
+            } else {
+                // Sound effect salah
+            }
+            kuisState.q++;
+            renderKuis();
+        }
+
+        // --- ANIMATION LOOP ---
+        const clock = new THREE.Clock();
+        
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            const delta = clock.getDelta();
+
+            // Intro Animation
+            if(currentScene === 'intro') {
+                introTorus.rotation.x += 0.5 * delta;
+                introTorus.rotation.y += 0.5 * delta;
+            }
+
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        // Handle Resize
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // Init
+        changeScene('intro');
+        animate();
+
+    </script>
+</body>
+</html>
